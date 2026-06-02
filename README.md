@@ -1,7 +1,6 @@
 # The Statistics of Transition Region Explosive Events Observed with ESIS
 
-My presentation at the American Astronomical Society's Solar Physics Division meeting on August 10th, 2026 in Baltimore, MD.
-
+Roy T. Smart, Charles C. Kankelborg, and Jacob D. Parker
 
 ## Abstract
 
