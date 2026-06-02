@@ -12,7 +12,8 @@ which records a spectrum in every pixel across a wide field of view simultaneous
 with high spatial, spectral, and temporal resolution.
 This snapshot capability lets ESIS capture the full spatial and spectral structure of
 rapidly evolving features that slit-scanning instruments such as IRIS can only sample sequentially.
-During its 5-minute flight, ESIS observed many transition region explosive events (EEs),
+During its 5-minute flight, ESIS observed ~20 transition region explosive events (EEs),
 compact brightenings with supersonic wing enhancements, in the O V 630 Å spectral line.
-This presentation will investigate the spatial, temporal, and non-thermal statistics of
-these EEs and compare them to similar events observed with IRIS.
+Leveraging ESIS's simultaneous imaging spectroscopy, this presentation will characterize the
+physical structure and evolution of these EEs, including their morphology, dynamics, and
+non-thermal motions, and place them into the context of other EE observations.
