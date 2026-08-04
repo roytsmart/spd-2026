@@ -8,42 +8,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.axes
 import matplotlib.colorbar
+import matplotlib.ticker
 import astropy.units as u
 import astropy.visualization
+import colorsynth
 import named_arrays as na
-import iris
+from .._observations import observation_iris
 from ._path import default_path
 
 __all__ = [
-    "observation",
     "iris_ee",
 ]
-
-
-def observation(
-    time: str = "2013-10-22 11:30",
-    window: str = "Si IV 1394",
-    slice_wavelength: slice = slice(750, 1250),
-) -> iris.sg.SpectrographObservation:
-    """
-    The IRIS spectrograph raster containing the explosive event.
-
-    Parameters
-    ----------
-    time
-        The time of the observation to download.
-    window
-        The name of the spectral window to load.
-    slice_wavelength
-        The range of wavelength pixels to keep,
-        chosen to isolate the spectral line from the rest of the window.
-    """
-    result = iris.sg.open(
-        time=time,
-        window=window,
-    )
-
-    return result[{result.axis_wavelength: slice_wavelength}]
 
 
 def iris_ee(
@@ -53,10 +28,13 @@ def iris_ee(
     index_x: int = 230,
     index_y: int = 483,
     velocity_limit: u.Quantity = 250 * u.km / u.s,
+    velocity_color: u.Quantity = 100 * u.km / u.s,
+    velocity_limit_key: u.Quantity = 150 * u.km / u.s,
     velocity_gap: u.Quantity = 150 * u.km / u.s,
     position_gap: u.Quantity = 5 * u.arcsec,
     speed_sound: u.Quantity = 44 * u.km / u.s,
     linewidth: float = 2,
+    height_key: float = 0.5,
     figsize: tuple[float, float] = (13.33, 7.5),
     dpi: float = 200,
     path: None | pathlib.Path = None,
@@ -94,6 +72,13 @@ def iris_ee(
         The index along the slit of the explosive event.
     velocity_limit
         The Doppler velocity range to display in the second and third panels.
+    velocity_color
+        The Doppler velocity mapped to each end of the visible spectrum in
+        the first panel.
+        The same value is used for the raster and for the color key,
+        so that the key always describes the image.
+    velocity_limit_key
+        The Doppler velocity range to display in the color key.
     velocity_gap
         The half-width of the gap in the marker straddling the explosive
         event in the second panel.
@@ -106,6 +91,9 @@ def iris_ee(
         roughly 43 km/s for a fully ionized plasma with :math:`\\mu = 0.6`.
     linewidth
         The width of the spectral line profiles in the third panel.
+    height_key
+        The height of the color key in the first figure,
+        as a fraction of the height of the panels it stands in for.
     figsize
         The width and height of the figures in inches.
     dpi
@@ -115,7 +103,7 @@ def iris_ee(
         The directory in which to save the figures.
         If :obj:`None`, they are saved alongside the other figures.
     """
-    obs = observation(
+    obs = observation_iris(
         time=time,
         window=window,
     )
@@ -138,6 +126,8 @@ def iris_ee(
     x_slit = position.x[index].ndarray.value
     y_event = position.y[index].ndarray.value
 
+    median = np.nanmedian(obs.outputs, axis=(axis_time, axis_x, axis_y))
+
     with astropy.visualization.quantity_support():
 
         fig, axs = plt.subplots(
@@ -159,6 +149,8 @@ def iris_ee(
             index_time=index_time,
             ax=axs[0],
             cax=cax,
+            velocity_min=-velocity_color,
+            velocity_max=+velocity_color,
         )
 
         # The spectrum along the slit.
@@ -186,7 +178,7 @@ def iris_ee(
         )
         na.plt.stairs(
             velocity,
-            np.nanmedian(obs.outputs, axis=(axis_time, axis_x, axis_y)),
+            median,
             label=r"median $1394\,\AA$",
             linewidth=linewidth,
             ax=axs[2],
@@ -198,13 +190,13 @@ def iris_ee(
             color="red",
             linestyle="--",
             label="$c_s$",
-            zorder=0,
+            zorder=-1,
         )
         axs[2].axvline(
             -speed_sound.value,
             color="red",
             linestyle="--",
-            zorder=0,
+            zorder=-1,
         )
         axs[2].yaxis.tick_right()
         axs[2].yaxis.set_label_position("right")
@@ -268,23 +260,146 @@ def iris_ee(
         ]
     ]
 
+    # A key showing which Doppler velocity maps to which color in the raster,
+    # which is only useful while the raster is the only panel on screen.
+    # It is placed in the space that the later panels will occupy, using their
+    # frozen positions, so that adding it cannot move anything else.
+    bbox = axs[1].get_position().union([axs[1].get_position(), axs[2].get_position()])
+    height = height_key * bbox.height
+
+    # Half an inch of room on the left so that the vertical axis label does
+    # not run into the raster, and the same on the right so that the labels
+    # of the second vertical axis are not clipped by the edge of the figure.
+    pad = 0.5 / figsize[0]
+
+    # An inch of room underneath for the wavelength scale, which hangs below
+    # the axes. The key sits at the bottom of the space left by the panels
+    # which have not appeared yet, leaving the top of that space free.
+    pad_lower = 1.0 / figsize[1]
+
+    ax_key = fig.add_axes(
+        (
+            bbox.x0 + pad,
+            bbox.y0 + pad_lower,
+            bbox.width - 2 * pad,
+            height,
+        )
+    )
+
+    with astropy.visualization.quantity_support():
+
+        velocity_center = velocity.cell_centers(obs.axis_wavelength).ndarray.squeeze()
+
+        # The private function which `colorsynth` uses to map the spectral
+        # axis onto the visible spectrum. It is given the same velocity range
+        # as the raster, so that the key describes the colors in the image
+        # rather than some other mapping.
+        transform_wavelength = colorsynth._colorsynth._transform_wavelength(
+            velocity_center,
+            -1,
+            -velocity_color,
+            +velocity_color,
+            None,
+        )
+        wavelength_visible = transform_wavelength(velocity_center)
+
+        # The response of each color channel to a spectrum which is nonzero
+        # at only one point along the spectral axis.
+        spd = np.diagflat(np.ones(wavelength_visible.shape))
+        XYZ = colorsynth.XYZcie1931_from_spd(
+            spd,
+            wavelength_visible[..., np.newaxis],
+            axis=0,
+        )
+        XYZ = XYZ / XYZ.max(axis=1, keepdims=True)
+        XYZ = XYZ * np.array([0.9505, 1.0000, 1.0890])[..., np.newaxis]
+        red, green, blue = colorsynth.sRGB(XYZ, axis=0)
+
+        for channel, color in zip([red, green, blue], ["red", "green", "blue"]):
+            ax_key.plot(velocity_center, channel, color=color)
+
+        ax_key_twin = ax_key.twinx()
+        na.plt.stairs(
+            velocity,
+            median,
+            label=r"median $1394\,\AA$",
+            color="black",
+            linewidth=linewidth,
+            ax=ax_key_twin,
+        )
+        ax_key_twin.legend()
+
+        ax_key.set_xlim(-velocity_limit_key.value, +velocity_limit_key.value)
+        ax_key.set_ylim(-0.2, None)
+        ax_key.set_ylabel("sRGB response")
+        ax_key_twin.set_ylim(0, None)
+
+        # The same curves against the visible wavelength they are mapped onto.
+        # The mapping is linear, so setting the limits is enough to line this
+        # axis up with the one below it.
+        unit_visible = wavelength_visible.unit
+        ax_key_top = ax_key.twiny()
+        ax_key_top.set_xlim(
+            transform_wavelength(-velocity_limit_key).to_value(unit_visible),
+            transform_wavelength(+velocity_limit_key).to_value(unit_visible),
+        )
+        ax_key_top.set_xlabel(f"visible wavelength ({unit_visible:latex_inline})")
+
+        # A third scale, below the velocity, giving the wavelength of the
+        # spectral line itself. The velocity and the wavelength are two
+        # parameterizations of the same grid of pixels, so one is interpolated
+        # onto the other rather than assuming a Doppler convention.
+        unit_velocity = na.unit(velocity)
+        unit_line = na.unit(obs.inputs.wavelength)
+        ax_key_line = ax_key.twiny()
+        ax_key_line.set_xlim(
+            *np.interp(
+                x=[-velocity_limit_key.to_value(unit_velocity)]
+                + [+velocity_limit_key.to_value(unit_velocity)],
+                xp=velocity[{axis_time: index_time}].ndarray.to_value(unit_velocity),
+                fp=obs.inputs.wavelength[{axis_time: index_time}].ndarray.to_value(
+                    unit_line
+                ),
+            )
+        )
+        ax_key_line.xaxis.set_ticks_position("bottom")
+        ax_key_line.xaxis.set_label_position("bottom")
+        ax_key_line.spines["bottom"].set_position(("outward", 36))
+        for spine in ax_key_line.spines.values():
+            spine.set_visible(False)
+        ax_key_line.spines["bottom"].set_visible(True)
+        ax_key_line.patch.set_visible(False)
+        ax_key_line.set_xlabel(f"wavelength ({unit_line:latex_inline})")
+
+        # These tick labels are long enough to run into each other at the
+        # width of this axes, so use fewer of them than usual.
+        ax_key_line.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(nbins=4))
+
     # Each panel appears along with the marker in the panel to its left which
     # points at it, so that a marker is never on screen before the panel
-    # explaining it.
-    revealed = [
-        [],
+    # explaining it. The color key occupies the space of the panels which have
+    # not appeared yet, so it goes away as soon as the first of them arrives.
+    shown = [
+        [ax_key, ax_key_twin, ax_key_top, ax_key_line],
         [axs[1], *lines_slit],
         [axs[2], *lines_event],
     ]
+    hidden = [
+        [],
+        [ax_key, ax_key_twin, ax_key_top, ax_key_line],
+        [],
+    ]
 
-    for group in revealed[1:]:
+    for group in shown[1:]:
         for artist in group:
             artist.set_visible(False)
 
     result = []
-    for i, group in enumerate(revealed):
-        for artist in group:
+    for i, (group_shown, group_hidden) in enumerate(zip(shown, hidden)):
+        for artist in group_shown:
             artist.set_visible(True)
+        for artist in group_hidden:
+            artist.set_visible(False)
         path_i = path / f"iris-ee-{i + 1}.svg"
         fig.savefig(path_i, dpi=dpi)
         result.append(path_i)
