@@ -30,6 +30,9 @@ def backprojections_simulated() -> na.FunctionArray[
 
     The wavelength of each image is restored afterwards, so that the result
     still knows which wavelength each one belongs to and can be colored by it.
+
+    The result is a spectral radiance in the same units as the scene it came
+    from, so the two can be compared directly.
     """
     scene = scene_esis()
 
@@ -48,7 +51,14 @@ def backprojections_simulated() -> na.FunctionArray[
     # The sky is likewise a single wavelength wide.
     coordinates = scene.inputs.replace(wavelength=images.inputs.wavelength)
 
-    result = system.backproject(image, coordinates.spectral_positional)
+    # Left to itself the backprojection comes back in photon units, which are
+    # the natural units of the sensor. Asking for the units of the scene makes
+    # the two directly comparable.
+    result = system.backproject(
+        image,
+        coordinates.spectral_positional,
+        unit=scene.outputs.unit,
+    )
 
     result.inputs.wavelength = wavelength
 
