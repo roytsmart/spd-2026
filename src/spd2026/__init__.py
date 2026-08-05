@@ -6,6 +6,7 @@ from ._observations import (
 )
 from ._instruments import instrument
 from ._images import images_simulated
+from ._backprojections import backprojections_simulated
 from . import figures
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "scene_esis",
     "instrument",
     "images_simulated",
+    "backprojections_simulated",
     "figures",
 ]
