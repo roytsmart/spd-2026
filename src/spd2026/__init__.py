@@ -4,6 +4,7 @@ from ._observations import (
     observation_iris,
     scene_esis,
 )
+from ._instruments import instrument
 from . import figures
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
     "window_default",
     "observation_iris",
     "scene_esis",
+    "instrument",
     "figures",
 ]
