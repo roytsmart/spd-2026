@@ -14,6 +14,15 @@ import astropy.visualization
 import colorsynth
 import named_arrays as na
 from .._observations import observation_iris
+from ._color import velocity_color_default, percentile_default
+from ._layout import (
+    figsize_default,
+    rect_image_default,
+    rect_colorbar_default,
+    rect_spectrum_default,
+    rect_profile_default,
+    set_limits_sky,
+)
 from ._path import default_path
 
 __all__ = [
@@ -28,15 +37,16 @@ def iris_ee(
     index_x: int = 230,
     index_y: int = 483,
     velocity_limit: u.Quantity = 250 * u.km / u.s,
-    velocity_color: u.Quantity = 100 * u.km / u.s,
-    velocity_limit_key: u.Quantity = 150 * u.km / u.s,
+    velocity_color: u.Quantity = velocity_color_default,
+    velocity_limit_key: u.Quantity = velocity_color_default,
+    percentile: float = percentile_default,
     velocity_gap: u.Quantity = 150 * u.km / u.s,
     position_gap: u.Quantity = 5 * u.arcsec,
     speed_sound: u.Quantity = 44 * u.km / u.s,
     linewidth: float = 2,
     headroom: float = 1.7,
     height_key: float = 0.5,
-    figsize: tuple[float, float] = (13.33, 7.5),
+    figsize: tuple[float, float] = figsize_default,
     dpi: float = 200,
     path: None | pathlib.Path = None,
 ) -> list[pathlib.Path]:
@@ -80,6 +90,9 @@ def iris_ee(
         so that the key always describes the image.
     velocity_limit_key
         The Doppler velocity range to display in the color key.
+    percentile
+        The percentile of the signal placed at the top of the brightness
+        scale of the first panel, separately at each wavelength.
     velocity_gap
         The half-width of the gap in the marker straddling the explosive
         event in the second panel.
@@ -134,19 +147,15 @@ def iris_ee(
 
     with astropy.visualization.quantity_support():
 
-        fig, axs = plt.subplots(
-            ncols=3,
-            figsize=figsize,
-            constrained_layout=True,
-            gridspec_kw=dict(
-                width_ratios=[0.56, 0.22, 0.22],
-            ),
-        )
-        cax, _ = matplotlib.colorbar.make_axes(
-            axs[0],
-            location="left",
-            pad=0.15,
-        )
+        # Placed rather than arranged, so that another figure can put its
+        # image of the sky in exactly the same place, see :mod:`._layout`.
+        fig = plt.figure(figsize=figsize)
+        axs = [
+            fig.add_axes(rect_image_default),
+            fig.add_axes(rect_spectrum_default),
+            fig.add_axes(rect_profile_default),
+        ]
+        cax = fig.add_axes(rect_colorbar_default)
 
         # The raster as a false-color image.
         obs.show(
@@ -155,6 +164,13 @@ def iris_ee(
             cax=cax,
             velocity_min=-velocity_color,
             velocity_max=+velocity_color,
+            # Given rather than left to `show`, which would use its own
+            # percentile, so that this figure and the blink are scaled alike.
+            vmax=np.nanpercentile(
+                obs.outputs,
+                percentile,
+                axis=(axis_time, axis_x, axis_y),
+            ),
         )
 
         # The key is narrow and the radiance runs to six figures, so it can
@@ -221,6 +237,8 @@ def iris_ee(
         # sets it for both.
         axs[1].set_xlim(-velocity_limit.value, +velocity_limit.value)
 
+        set_limits_sky(axs[0], position)
+
     # Each color mesh has hundreds of thousands of cells, which would make an
     # enormous SVG if they were stored as vectors, so draw them as embedded
     # images instead. The axes, text, and lines stay vectors.
@@ -228,10 +246,9 @@ def iris_ee(
         for artist in ax.collections:
             artist.set_rasterized(True)
 
-    # Freeze the layout so that the hidden panels still take up space and the
-    # visible panels do not move between figures.
+    # The positions are fixed, so hiding a panel cannot move the others, but
+    # the figure still has to be drawn before anything can be measured off it.
     fig.canvas.draw()
-    fig.set_layout_engine("none")
 
     # Both markers are drawn as a pair of segments with a gap in the middle,
     # so that they point at the feature without covering it. Their endpoints
