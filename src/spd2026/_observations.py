@@ -101,6 +101,14 @@ def observation_iris(
 
     result = result[{result.axis_wavelength: slice_wavelength}]
 
+    # The raster is a patch of sky far from the center of the disk, but the
+    # instrument which observes the scene made from it is modeled as pointing
+    # along its own boresight, so a scene left where it was found falls off
+    # the edge of the detector. Placing the raster on the boresight is what
+    # the ``mart-iris`` notebook in :mod:`esis` does, and doing it here means
+    # the raster and everything derived from it share one set of coordinates.
+    result.inputs.position = result.inputs.position - result.inputs.position.mean()
+
     return result.radiance
 
 
@@ -140,6 +148,14 @@ def scene_esis(
         velocity_max=250 * u.km / u.s,
         **kwargs,
     )
+
+    # Placed on the boresight for the same reason as in
+    # :func:`observation_iris`, and repeated here rather than taken from it
+    # because `scene_iris` opens its own copy of the raster. The two start
+    # from the same coordinates, so subtracting each mean leaves them on the
+    # same ones.
+    scene.inputs.position = scene.inputs.position - scene.inputs.position.mean()
+
     scene = scene[{scene.axis_time: 0}]
     scene.timedelta = scene.timedelta[{scene.axis_time: 0}]
     return scene
