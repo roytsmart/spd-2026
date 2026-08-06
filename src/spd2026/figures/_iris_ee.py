@@ -157,7 +157,12 @@ def iris_ee(
         ]
         cax = fig.add_axes(rect_colorbar_default)
 
-        # The raster as a false-color image.
+        # The raster as a false-color image. `show` adds a second axes to the
+        # key, for the velocity beside the wavelength, and does not hand it
+        # back, so it is picked out by being the one which was not there
+        # before.
+        axes_before = set(fig.axes)
+
         obs.show(
             index_time=index_time,
             ax=axs[0],
@@ -172,6 +177,15 @@ def iris_ee(
                 axis=(axis_time, axis_x, axis_y),
             ),
         )
+
+        (cax_twin,) = set(fig.axes) - axes_before
+
+        # Said rather than left as a bare unit, so that the key reads the same
+        # way as the key of the blink.
+        cax.set_ylabel(
+            f"wavelength ({na.unit(obs.inputs.wavelength_rest):latex_inline})"
+        )
+        cax_twin.set_ylabel(f"velocity ({velocity_color.unit:latex_inline})")
 
         # The key is narrow and the radiance runs to six figures, so it can
         # only carry a couple of ticks, turned to keep them apart.
