@@ -67,7 +67,9 @@ def observation_iris(
     """
     The IRIS spectrograph raster containing the explosive event.
 
-    The cosmic ray spikes have been removed from the signal.
+    The cosmic ray spikes have been removed from the signal, and the signal
+    has been converted from instrument units into a spectral radiance, so
+    that it can be compared with anything else measured in physical units.
 
     Parameters
     ----------
@@ -97,7 +99,9 @@ def observation_iris(
         ),
     )
 
-    return result[{result.axis_wavelength: slice_wavelength}]
+    result = result[{result.axis_wavelength: slice_wavelength}]
+
+    return result.radiance
 
 
 @memory.cache

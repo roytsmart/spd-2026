@@ -34,6 +34,7 @@ def iris_ee(
     position_gap: u.Quantity = 5 * u.arcsec,
     speed_sound: u.Quantity = 44 * u.km / u.s,
     linewidth: float = 2,
+    headroom: float = 1.7,
     height_key: float = 0.5,
     figsize: tuple[float, float] = (13.33, 7.5),
     dpi: float = 200,
@@ -91,6 +92,9 @@ def iris_ee(
         roughly 43 km/s for a fully ionized plasma with :math:`\\mu = 0.6`.
     linewidth
         The width of the spectral line profiles in the third panel.
+    headroom
+        The height of the third panel as a multiple of the height of the
+        profile of the explosive event, which leaves room for the legend.
     height_key
         The height of the color key in the first figure,
         as a fraction of the height of the panels it stands in for.
@@ -153,6 +157,11 @@ def iris_ee(
             velocity_max=+velocity_color,
         )
 
+        # The key is narrow and the radiance runs to six figures, so it can
+        # only carry a couple of ticks, turned to keep them apart.
+        cax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(nbins=2))
+        cax.tick_params(axis="x", labelrotation=45, labelsize="small")
+
         # The spectrum along the slit.
         axs[1].sharey(axs[0])
         na.plt.pcolormesh(
@@ -200,7 +209,11 @@ def iris_ee(
         )
         axs[2].yaxis.tick_right()
         axs[2].yaxis.set_label_position("right")
-        axs[2].set_ylim(None, 300)
+
+        # Leave room above the profile of the event for the legend, as a
+        # multiple of its height rather than as a number, so that it does not
+        # depend on the units of the signal.
+        axs[2].set_ylim(None, headroom * np.nanmax(obs.outputs[index].ndarray))
         axs[2].set_title(f"$y = {y_event:0.1f}$ {unit_position:latex_inline}")
         axs[2].legend()
 
@@ -230,7 +243,9 @@ def iris_ee(
         component: int,
     ) -> float:
         """The position of a point in the coordinates of the given axes."""
-        return ax.transAxes.inverted().transform(ax.transData.transform(point))[component]
+        return ax.transAxes.inverted().transform(ax.transData.transform(point))[
+            component
+        ]
 
     gap_position = position_gap.to_value(na.unit(position.y))
     lines_slit = [
@@ -327,7 +342,7 @@ def iris_ee(
             linewidth=linewidth,
             ax=ax_key_twin,
         )
-        ax_key_twin.legend()
+        ax_key_twin.legend(loc="upper right")
 
         ax_key.set_xlim(-velocity_limit_key.value, +velocity_limit_key.value)
         ax_key.set_ylim(-0.2, None)
