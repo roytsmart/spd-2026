@@ -1,3 +1,4 @@
+from ._units import unit_radiance
 from ._observations import (
     time_default,
     window_default,
@@ -10,6 +11,7 @@ from ._backprojections import backprojections_simulated
 from . import figures
 
 __all__ = [
+    "unit_radiance",
     "time_default",
     "window_default",
     "observation_iris",

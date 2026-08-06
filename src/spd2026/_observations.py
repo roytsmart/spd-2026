@@ -9,6 +9,7 @@ import named_arrays as na
 import iris
 import esis
 from ._caching import memory
+from ._units import unit_radiance
 
 __all__ = [
     "time_default",
@@ -109,7 +110,16 @@ def observation_iris(
     # the raster and everything derived from it share one set of coordinates.
     result.inputs.position = result.inputs.position - result.inputs.position.mean()
 
-    return result.radiance
+    result = result.radiance
+
+    # IRIS gives a radiance per nanometer and the synthetic scene is per
+    # angstrom, which made two figures showing the same patch of sky label
+    # their color keys differently. Converted here so that everything
+    # downstream is on one scale, see :mod:`._units`.
+    return dataclasses.replace(
+        result,
+        outputs=result.outputs.to(unit_radiance),
+    )
 
 
 @memory.cache
