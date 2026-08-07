@@ -44,8 +44,8 @@ def mart_moments(
         3e3 * u.erg / (u.s * u.sr * u.cm**2),
     ),
     range_median: tuple[u.Quantity, u.Quantity] = (
-        -60 * u.km / u.s,
-        +60 * u.km / u.s,
+        -80 * u.km / u.s,
+        +80 * u.km / u.s,
     ),
     range_iqr: tuple[u.Quantity, u.Quantity] = (
         0 * u.km / u.s,
