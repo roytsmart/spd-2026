@@ -15,6 +15,7 @@ import colorsynth
 import named_arrays as na
 from .._observations import observation_iris
 from ._color import velocity_color_default, percentile_default
+from ._event import x_event_default, y_event_default
 from ._layout import (
     figsize_default,
     rect_image_default,
@@ -34,8 +35,8 @@ def iris_ee(
     time: str = "2013-10-22 11:30",
     window: str = "Si IV 1394",
     index_time: int = 0,
-    index_x: int = 230,
-    index_y: int = 483,
+    x_event: u.Quantity = x_event_default,
+    y_event: u.Quantity = y_event_default,
     velocity_limit: u.Quantity = 250 * u.km / u.s,
     velocity_color: u.Quantity = velocity_color_default,
     velocity_limit_key: u.Quantity = velocity_color_default,
@@ -77,10 +78,12 @@ def iris_ee(
         The name of the spectral window to load.
     index_time
         The index along the time axis to display.
-    index_x
-        The index of the slit position containing the explosive event.
-    index_y
-        The index along the slit of the explosive event.
+    x_event
+        The horizontal position of the explosive event, measured from the
+        center of the field.
+        The slit shown in the second panel is the one passing nearest to it.
+    y_event
+        The vertical position of the explosive event.
     velocity_limit
         The Doppler velocity range to display in the second and third panels.
     velocity_color
@@ -129,8 +132,19 @@ def iris_ee(
     axis_x = obs.axis_detector_x
     axis_y = obs.axis_detector_y
 
-    index_slit = {axis_time: index_time, axis_x: index_x}
-    index = index_slit | {axis_y: index_y}
+    # The event is given as a place on the sky, and the nearest cell of the
+    # raster is the one shown. The raster is a parallelogram, so a cell has
+    # to be searched for in both directions at once rather than found in each
+    # separately: the horizontal coordinate changes along the slit as well as
+    # across it.
+    centers = obs.inputs.position[{axis_time: index_time}].cell_centers(
+        (axis_x, axis_y)
+    )
+    distance = np.square(centers.x - x_event) + np.square(centers.y - y_event)
+    nearest = np.argmin(distance)
+
+    index_slit = {axis_time: index_time, axis_x: int(nearest[axis_x].ndarray)}
+    index = index_slit | {axis_y: int(nearest[axis_y].ndarray)}
 
     if path is None:
         path = default_path
