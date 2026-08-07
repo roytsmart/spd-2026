@@ -9,6 +9,7 @@ from ._instruments import instrument
 from ._images import images_simulated
 from ._backprojections import backprojections_simulated
 from ._degraded import coordinates_degraded, scene_degraded
+from ._inversions import InversionSim, inversion_sim
 from . import figures
 
 __all__ = [
@@ -22,5 +23,7 @@ __all__ = [
     "backprojections_simulated",
     "coordinates_degraded",
     "scene_degraded",
+    "InversionSim",
+    "inversion_sim",
     "figures",
 ]
