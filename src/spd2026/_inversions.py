@@ -69,6 +69,7 @@ def inversion_sim(
     velocity_max: u.Quantity = 250 * u.km / u.s,
     num_iteration: int = 50,
     threshold_convergence: float = 1e-6,
+    gamma: float = 1,
     width_guess: u.Quantity = esis.flights.f1.spectrum.O_V.width_doppler,
     intermediate: bool = True,
 ) -> InversionSim:
@@ -114,6 +115,14 @@ def inversion_sim(
         smaller number means the inversion is allowed to keep going while it
         is still gaining a little, rather than a better fit being demanded of
         it.
+    gamma
+        How much of the correction each iteration applies, being the power
+        the correction is raised to before it is used.
+
+        :mod:`ctis` uses two over the number of channels, which is a half
+        here, so that an iteration moves half as far as the images ask it to.
+        One applies the whole of it, which arrives at the same places in
+        fewer iterations rather than at different ones.
     width_guess
         The standard deviation of the Gaussian the guess starts from.
         The measured Doppler width of the line itself by default, which is
@@ -191,6 +200,7 @@ def inversion_sim(
         instrument=instrument_ctis,
         num_iteration=num_iteration,
         threshold_convergence=threshold_convergence,
+        gamma=gamma,
         intermediate=intermediate,
     )
 
