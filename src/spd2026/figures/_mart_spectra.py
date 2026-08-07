@@ -51,10 +51,11 @@ def mart_spectra(
     x_event: u.Quantity = x_event_default,
     y_event: u.Quantity = y_event_default,
     velocity_limit: u.Quantity = 250 * u.km / u.s,
+    velocity_gap: u.Quantity = 200 * u.km / u.s,
     percentile: float = percentile_default,
     speed_sound: u.Quantity = 76 * u.km / u.s,
     cmap: str = "viridis",
-    cmap_residual: str = "RdBu_r",
+    cmap_residual: str = "gray",
     linewidth: float = 2,
     headroom: float = 1.5,
     figsize: tuple[float, float] = figsize_default,
@@ -70,14 +71,19 @@ def mart_spectra(
     The first three panels are the spectrum along the slit through the
     event: the scene at the resolution ESIS can distinguish, what MART has
     recovered at this iteration, and the difference between them. The last
-    panel is the line profile at the event itself, with the same three
-    things drawn on top of one another.
+    panel is the line profile at the event itself, with the scene and the
+    reconstruction drawn on top of one another.
 
-    The residual is the scene minus the reconstruction, so red is light the
-    inversion failed to recover and blue is light it invented. It is drawn on
+    Only those two, since what is left over is the gap between them and can
+    be read straight off. A third curve for it would be a second thing to
+    follow which says nothing the first two do not.
+
+    The residual is the scene minus the reconstruction, so light is light the
+    inversion failed to recover and dark is light it invented. It is drawn on
     the same scale as the two panels beside it, running from minus to plus
     rather than from zero, so that the size of what is left over can be read
-    against the size of what was there.
+    against the size of what was there, and the middle of its colormap is
+    where the two agree.
 
     The event is given as a place on the sky and the nearest cell of the
     recovered grid is shown. :func:`spd2026.figures.iris_ee` is given the
@@ -97,6 +103,10 @@ def mart_spectra(
         The vertical position of the explosive event.
     velocity_limit
         The Doppler velocity range to display.
+    velocity_gap
+        The half width of the gap in the marker which points at the row the
+        profile was taken from, wide enough that the marker does not lie
+        across the event it is pointing at.
     percentile
         The percentile of the scene placed at the top of the brightness
         scale, which the reconstruction and the residual share.
@@ -107,8 +117,10 @@ def mart_spectra(
     cmap
         The colormap of the scene and the reconstruction.
     cmap_residual
-        The colormap of the residual, which should be one that runs through
-        white at its middle, since the residual is signed.
+        The colormap of the residual.
+        Its range runs from minus to plus, so the middle of the colormap is
+        where the inversion got it right, the dark end is light it invented
+        and the light end is light it failed to recover.
     linewidth
         The width of the line profiles.
     headroom
@@ -168,14 +180,17 @@ def mart_spectra(
 
     # The profile panel has to hold every iteration, since its limits cannot
     # move from one frame to the next without the curves appearing to change
-    # size. Worked out over all of them rather than over the first, which is
-    # not the iteration whose residual reaches furthest.
+    # size. Worked out over all of them, and over the scene as well, since
+    # either may be the taller.
     profiles_mart = solutions.outputs[index].to_value(unit_radiance)
-    profiles_residual = profile_degraded - profiles_mart
 
     ylim_profile = (
-        min(0.0, 1.1 * float(np.nanmin(profiles_residual.ndarray))),
-        headroom * float(np.nanmax(profiles_mart.ndarray)),
+        0,
+        headroom
+        * max(
+            float(np.nanmax(profiles_mart.ndarray)),
+            float(np.nanmax(profile_degraded.ndarray)),
+        ),
     )
 
     chi_squared = inv.mean_chi_squared.mean("channel")
@@ -245,6 +260,25 @@ def mart_spectra(
         for ax in axs_spectra[1:]:
             ax.tick_params(axis="y", labelleft=False)
 
+        # Which row of the slit the profile beside these panels was taken
+        # from. Drawn as a pair of segments with a gap in the middle, so that
+        # it points at the event from either side without lying across it.
+        # The ends are fractions of the panel, which the velocity can be
+        # turned into directly, since the panel spans `velocity_limit` either
+        # way.
+        gap = (velocity_gap / velocity_limit).to_value(u.dimensionless_unscaled)
+        for ax in axs_spectra:
+            for xmin, xmax in [
+                (0, (1 - gap) / 2),
+                ((1 + gap) / 2, 1),
+            ]:
+                ax.axhline(
+                    y=y_event * unit_position,
+                    xmin=xmin,
+                    xmax=xmax,
+                    color="red",
+                )
+
         # Drawn underneath the profiles, so that they read as a backdrop
         # against which the profiles are compared.
         for sign in (-1, +1):
@@ -255,9 +289,6 @@ def mart_spectra(
                 label="$c_s$" if sign > 0 else None,
                 zorder=-1,
             )
-        # The residual is signed, so the profile panel needs a zero to read
-        # it against.
-        ax_profile.axhline(0, color="0.8", linewidth=1, zorder=-2)
 
         ax_profile.set_xlim(-velocity_limit.value, +velocity_limit.value)
         ax_profile.set_xlabel(f"velocity ({velocity_limit.unit:latex_inline})")
@@ -331,14 +362,6 @@ def mart_spectra(
                 profile_mart,
                 label="MART",
                 color="C1",
-                linewidth=linewidth,
-                ax=ax_profile,
-            )
-            na.plt.stairs(
-                velocity,
-                profile_degraded - profile_mart,
-                label="residual",
-                color="0.4",
                 linewidth=linewidth,
                 ax=ax_profile,
             )
