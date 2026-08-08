@@ -18,7 +18,7 @@ __all__ = [
 
 
 def frames(
-    channel: str = "Channel 3",
+    channel: None | str = "Channel 3",
     threshold: float = 0.8,
     normalize: bool = True,
 ) -> esis.data.Level_1:
@@ -38,6 +38,7 @@ def frames(
     channel
         The human-readable name of the channel to select,
         see :attr:`esis.data.abc.AbstractChannelData.channel`.
+        If :obj:`None`, every channel is kept.
     threshold
         The minimum median signal in a frame, expressed as a fraction of the
         largest median signal in the observation, for that frame to be kept.
@@ -51,13 +52,19 @@ def frames(
     axis_time = obs.axis_time
     axis_xy = obs.axis_xy
 
-    obs = obs[{axis_channel: obs.channel == channel}]
+    if channel is not None:
+        obs = obs[{axis_channel: obs.channel == channel}]
 
     # The median signal in each frame, which falls off at the start and the
     # end of the flight due to absorption by the upper atmosphere.
-    signal = obs.outputs.median(axis=axis_xy)[{axis_channel: 0}]
+    #
+    # Which frames to keep is decided by the channels together, since they
+    # look through the same atmosphere and every channel has to keep the same
+    # frames for them to be shown side by side.
+    signal = obs.outputs.median(axis=axis_xy)
+    signal_mean = signal.mean(axis=axis_channel)
 
-    obs = obs[{axis_time: signal > threshold * signal.max()}]
+    obs = obs[{axis_time: signal_mean > threshold * signal_mean.max()}]
 
     if normalize:
         signal = obs.outputs.median(axis=axis_xy)
