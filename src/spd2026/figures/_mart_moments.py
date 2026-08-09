@@ -41,7 +41,7 @@ def mart_moments(
     num_bins: int = 50,
     range_radiance: tuple[u.Quantity, u.Quantity] = (
         0 * u.erg / (u.s * u.sr * u.cm**2),
-        3e3 * u.erg / (u.s * u.sr * u.cm**2),
+        4e3 * u.erg / (u.s * u.sr * u.cm**2),
     ),
     range_median: tuple[u.Quantity, u.Quantity] = (
         -80 * u.km / u.s,
@@ -202,6 +202,11 @@ def mart_moments(
 
     labels = ("radiance", "median", "IQR")
 
+    # What each moment is a measurement of, which is what the panel is really
+    # about: how much light there is, where the plasma is going, and how fast
+    # it is coming apart.
+    titles = ("brightness", "Doppler shift", "line width")
+
     if path is None:
         path = default_path / f"mart-moments{suffix}"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -297,6 +302,11 @@ def mart_moments(
                     unit = na.unit(truths[j])
                     ax.set_xlabel(f"true {labels[j]} ({unit:latex_inline})")
                     ax.set_ylabel(f"recovered {labels[j]} ({unit:latex_inline})")
+
+                    # Named by what the moment means rather than by what it
+                    # is called, since the axes already say the latter twice
+                    # and a panel is easier to find by what it is about.
+                    ax.set_title(titles[j])
 
                 texts[j].set_text(f"Pearson's $r = {correlations[iteration][j]:.03f}$")
 
