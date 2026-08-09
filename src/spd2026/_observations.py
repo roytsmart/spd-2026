@@ -166,6 +166,12 @@ def scene_esis(
     # same ones.
     scene.inputs.position = scene.inputs.position - scene.inputs.position.mean()
 
+    # `scene_iris` hands back a radiance per nanometer, which is what
+    # :mod:`iris` reports and what it now passes through, while the raster
+    # this is compared against is per angstrom. Converted here for the same
+    # reason as in :func:`observation_iris`, see :mod:`._units`.
+    scene.outputs = scene.outputs.to(unit_radiance)
+
     scene = scene[{scene.axis_time: 0}]
     scene.timedelta = scene.timedelta[{scene.axis_time: 0}]
     return scene
