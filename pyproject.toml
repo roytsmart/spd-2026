@@ -22,6 +22,7 @@ dependencies = [
     "colorsynth",
     "interface-region-imaging-spectrograph",
     "euv-snapshot-imaging-spectrograph",
+    "solar-dynamics-observatory",
 ]
 dynamic = ["version"]
 
