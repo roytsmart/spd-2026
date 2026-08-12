@@ -7,7 +7,14 @@ from ._blink_channels import blink_channels
 from ._mart_scene import mart_scene
 from ._mart_spectra import mart_spectra
 from ._mart_moments import mart_moments
-from ._level_4 import level_4, level_4_velocity, level_4_lines
+from ._level_4 import (
+    level_4,
+    level_4_velocity,
+    level_4_lines,
+    level_4_event,
+    level_4_event_history,
+    level_4_event_motion,
+)
 
 __all__ = [
     "default_path",
@@ -23,4 +30,7 @@ __all__ = [
     "level_4",
     "level_4_velocity",
     "level_4_lines",
+    "level_4_event",
+    "level_4_event_history",
+    "level_4_event_motion",
 ]
