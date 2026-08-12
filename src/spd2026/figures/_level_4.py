@@ -1719,6 +1719,8 @@ def level_4_event_history(
     unit_intensity: u.UnitBase = u.erg / (u.s * u.cm**2 * u.deg**2),
     normalize: bool = False,
     animated: bool = False,
+    curves: bool = True,
+    marks: bool = True,
     cmap: str = "gray",
     cmap_velocity: str = "RdBu_r",
     figsize: tuple[float, float] = figsize_default,
@@ -1828,6 +1830,15 @@ def level_4_event_history(
         The panels on the right then step through the flight and a cursor
         runs across the curves, so that the shape of the event and the
         numbers taken from it are seen at the same moment.
+    curves
+        Whether to show the curves.
+
+        Hidden rather than never drawn, and hidden only once the layout has
+        been settled, so that the two panels of the line itself stay exactly
+        where they are in the full figure. One version can then follow the
+        other on a slide without the images appearing to move.
+    marks
+        Whether to mark the two followed places on the panels.
     cmap
         The colormap of the intensity panel.
     cmap_velocity
@@ -1923,7 +1934,10 @@ def level_4_event_history(
     )[:num_time]
 
     if path is None:
-        path = default_path / f"level-4-event-history{suffix}"
+        stem = "level-4-event-history"
+        if not curves:
+            stem = f"{stem}-images"
+        path = default_path / f"{stem}{suffix}"
     path.parent.mkdir(parents=True, exist_ok=True)
 
     fig, axs = plt.subplots(
@@ -2091,23 +2105,27 @@ def level_4_event_history(
     outline = [matplotlib.patheffects.withStroke(linewidth=3.5, foreground="white")]
 
     marker = {"blue": "o", "red": "s"}
-    follower = {
-        name: [
-            ax.plot(
-                tracked[label_line][f"x_{name}"][index_time],
-                tracked[label_line][f"y_{name}"][index_time],
-                marker=marker[name],
-                markerfacecolor="none",
-                markeredgecolor="black",
-                markersize=10,
-                markeredgewidth=1.8,
-                linestyle="none",
-                path_effects=outline,
-            )[0]
-            for ax in axs[:, 1]
-        ]
-        for name, _, _ in extremes
-    }
+    follower = (
+        {}
+        if not marks
+        else {
+            name: [
+                ax.plot(
+                    tracked[label_line][f"x_{name}"][index_time],
+                    tracked[label_line][f"y_{name}"][index_time],
+                    marker=marker[name],
+                    markerfacecolor="none",
+                    markeredgecolor="black",
+                    markersize=10,
+                    markeredgewidth=1.8,
+                    linestyle="none",
+                    path_effects=outline,
+                )[0]
+                for ax in axs[:, 1]
+            ]
+            for name, _, _ in extremes
+        }
+    )
 
     axs[1, 0].legend(
         handles=[
@@ -2127,44 +2145,50 @@ def level_4_event_history(
     # The marks are explained on the panel they are drawn on, rather than in
     # the legend above: a handle carrying a line style and a mark at once is
     # illegible at this size, the dashes and the mark running together.
-    axs[0, 1].legend(
-        handles=[
-            matplotlib.lines.Line2D(
-                [],
-                [],
-                markerfacecolor="none",
-                markeredgecolor="black",
-                linestyle="none",
-                marker=marker[name],
-                markersize=7,
-                markeredgewidth=1.8,
-                label=description,
-            )
-            for name, _, description in extremes
-        ],
-        loc="upper right",
-        fontsize="x-small",
-        framealpha=0.85,
-        handletextpad=0.4,
-        borderpad=0.4,
-    )
+    if marks:
+        axs[0, 1].legend(
+            handles=[
+                matplotlib.lines.Line2D(
+                    [],
+                    [],
+                    markerfacecolor="none",
+                    markeredgecolor="black",
+                    linestyle="none",
+                    marker=marker[name],
+                    markersize=7,
+                    markeredgewidth=1.8,
+                    label=description,
+                )
+                for name, _, description in extremes
+            ],
+            loc="upper right",
+            fontsize="x-small",
+            framealpha=0.85,
+            handletextpad=0.4,
+            borderpad=0.4,
+        )
+
+    # The layout is worked out once and then frozen, so that the panels do
+    # not shift about from one frame to the next as the labels change width,
+    # and so that hiding the curves below leaves everything else where it is.
+    fig.canvas.draw()
+    fig.set_layout_engine("none")
+
+    if not curves:
+        for ax in axs[:, 0]:
+            ax.set_visible(False)
 
     if not animated:
         fig.savefig(path, dpi=dpi)
         plt.close(fig)
         return path
 
-    # The layout is worked out once and then frozen, so that the panels do
-    # not shift about from one frame to the next as the labels change width.
-    fig.canvas.draw()
-    fig.set_layout_engine("none")
-
     def func(index: int) -> list[matplotlib.artist.Artist]:
 
         picture.set_data(image_intensity[index])
         image.set_data(image_velocity[index])
 
-        for name, _, _ in extremes:
+        for name in follower:
             for artist in follower[name]:
                 artist.set_data(
                     [tracked[label_line][f"x_{name}"][index]],
