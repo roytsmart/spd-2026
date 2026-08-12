@@ -101,7 +101,7 @@ def _open(path_data: None | pathlib.Path) -> "esis.data.Level_4":
 def level_4(
     path_data: None | pathlib.Path = None,
     center: None | na.Cartesian2dVectorArray = None,
-    radius: u.Quantity = 60 * u.arcsec,
+    radius: u.Quantity = radius_event_default,
     center_box: None | na.Cartesian2dVectorArray = center_event_default,
     radius_box: u.Quantity = radius_event_default,
     color_box: str = "red",
@@ -396,7 +396,7 @@ def level_4(
 def level_4_velocity(
     path_data: None | pathlib.Path = None,
     center: None | na.Cartesian2dVectorArray = None,
-    radius: u.Quantity = 60 * u.arcsec,
+    radius: u.Quantity = radius_event_default,
     velocity_limit: u.Quantity = 80 * u.km / u.s,
     cmap: str = "RdBu_r",
     color_bad: str = "black",
@@ -1249,11 +1249,11 @@ def level_4_lines(
 def level_4_event(
     path_data: None | pathlib.Path = None,
     center: None | na.Cartesian2dVectorArray = None,
-    radius: u.Quantity = 60 * u.arcsec,
-    wavelength_aia: u.Quantity = 304 * u.AA,
+    radius: u.Quantity = radius_event_default,
+    wavelength_aia: u.Quantity = [304, 131, 171, 193] * u.AA,
     unit_intensity: u.UnitBase = u.erg / (u.s * u.cm**2 * u.deg**2),
     percentile: float = 99.5,
-    velocity_limit: u.Quantity = 40 * u.km / u.s,
+    velocity_limit: u.Quantity = 60 * u.km / u.s,
     magnetogram_limit: u.Quantity = 100 * u.G,
     cmap: str = "gray",
     cmap_velocity: str = "RdBu_r",
@@ -1272,7 +1272,7 @@ def level_4_event(
     row is the intensity of each line, the middle row is the Doppler shift of
     the same line directly beneath it, and the bottom row is what the two
     instruments watching the same place from orbit saw: AIA in its
-    :math:`304\,\text{\AA}` channel, and an HMI magnetogram.
+    :math:`304\,\text{\AA}` channel, two coronal ones, and an HMI magnetogram.
 
     Reading down a column says what one line is doing and how fast; reading
     across the top row says which temperatures it is doing it at; and the
@@ -1296,7 +1296,12 @@ def level_4_event(
     radius
         The half width of the region shown.
     wavelength_aia
-        The AIA channel drawn in the bottom row.
+        The AIA channels drawn in the bottom row, one panel each.
+
+        Four by default, in order of the temperature they are formed at,
+        as the rows above them are: 304 is the He II line, formed near the
+        coolest of the ESIS lines, 131 sits between that and the rest, and
+        171 and 193 are coronal, formed above the hottest of them.
     unit_intensity
         The unit to draw the intensities in, see :func:`_energy_photon`.
     percentile
@@ -1342,7 +1347,7 @@ def level_4_event(
         path_data = path_level_4_default.parent
 
     if center is None:
-        center = position_event_e
+        center = center_event_default
 
     a = esis.data.Level_4.from_fits(path_data)
 
@@ -1395,13 +1400,21 @@ def level_4_event(
 
     vmax = [float(np.nanpercentile(im, percentile)) for im in intensity]
 
-    images_aia, extent_aia, unit_aia = _aia(
-        a=a,
-        wavelength=wavelength_aia,
-        center=center,
-        radius=radius,
-    )
-    vmax_aia = float(np.nanpercentile(images_aia, percentile))
+    images_aia = []
+    extent_aia = []
+    vmax_aia = []
+    for wavelength_aia_i in wavelength_aia:
+        images_i, extent_i, _ = _aia(
+            a=a,
+            wavelength=wavelength_aia_i,
+            center=center,
+            radius=radius,
+        )
+        images_aia.append(images_i)
+        extent_aia.append(extent_i)
+        vmax_aia.append(float(np.nanpercentile(images_i, percentile)))
+
+    num_aia = len(images_aia)
 
     images_hmi, x_hmi, y_hmi, unit_hmi = _hmi(
         a=a,
@@ -1434,6 +1447,10 @@ def level_4_event(
         sharey=True,
     )
 
+    # Room down the right for the color scale of the middle row, which has no
+    # empty panel of its own to go in.
+    fig.get_layout_engine().set(rect=(0, 0, 0.915, 1))
+
     images_line = []
 
     for i in range(num_line):
@@ -1462,20 +1479,25 @@ def level_4_event(
             )
         )
 
-    image_aia = axs[2, 0].imshow(
-        images_aia[0],
-        origin="lower",
-        extent=extent_aia,
-        cmap=cmap,
-        vmin=0,
-        vmax=vmax_aia,
-        aspect="equal",
-    )
-    axs[2, 0].set_title(f"AIA {wavelength_aia.to_value(u.AA):.0f}")
+    image_aia = []
+    for i in range(num_aia):
+        image_aia.append(
+            axs[2, i].imshow(
+                images_aia[i][0],
+                origin="lower",
+                extent=extent_aia[i],
+                cmap=cmap,
+                vmin=0,
+                vmax=vmax_aia[i],
+                aspect="equal",
+            )
+        )
+        axs[2, i].set_title(f"AIA {wavelength_aia[i].to_value(u.AA):.0f}")
 
     # A mesh rather than an image, since HMI is not registered and the
     # coordinates of a pixel therefore depend on both of its indices.
-    mesh_hmi = axs[2, 1].pcolormesh(
+    ax_hmi = axs[2, num_aia]
+    mesh_hmi = ax_hmi.pcolormesh(
         x_hmi,
         y_hmi,
         images_hmi[0],
@@ -1483,27 +1505,12 @@ def level_4_event(
         norm=norm_magnetogram,
         rasterized=True,
     )
-    axs[2, 1].set_title("HMI magnetogram")
-    axs[2, 1].set_aspect("equal")
+    ax_hmi.set_title("HMI magnetogram")
+    ax_hmi.set_aspect("equal")
 
-    # The panels of the bottom row which no instrument landed in are where
-    # the two shared color scales go, so that every row stays the same height
-    # as the others instead of one being shortened to make room.
-    for ax in axs[2, 2:]:
+    # The panels of the bottom row which no instrument landed in.
+    for ax in axs[2, num_aia + 1 :]:
         ax.set_axis_off()
-
-    fig.colorbar(
-        matplotlib.cm.ScalarMappable(norm=norm_velocity, cmap=colormap_velocity),
-        cax=axs[2, 2].inset_axes((0.0, 0.52, 1.0, 0.08)),
-        orientation="horizontal",
-        label=f"LOS velocity ({unit_velocity:latex_inline})",
-    )
-    fig.colorbar(
-        mesh_hmi,
-        cax=axs[2, 3].inset_axes((0.0, 0.52, 1.0, 0.08)),
-        orientation="horizontal",
-        label=f"line-of-sight field ({unit_hmi:latex_inline})",
-    )
 
     # Every panel shows the same piece of sky and the axes are shared, so
     # this is said once. The AIA and HMI grids reach a little past the ESIS
@@ -1524,16 +1531,42 @@ def level_4_event(
     # of every panel with another below it, and a panel with an empty one
     # below would otherwise be left with no scale at all.
     for column in range(num_line):
-        row = 2 if column < 2 else 1
+        row = 2 if column <= num_aia else 1
         axs[row, column].set_xlabel(
             f"helioprojective $x$ ({unit_position:latex_inline})",
         )
         axs[row, column].tick_params(labelbottom=True)
 
     if timestamp:
-        text = fig.suptitle("")
+        text = fig.suptitle(
+            time[{axis_time: 0}].ndarray.strftime("%Y-%m-%d %H:%M:%S UTC")
+        )
     else:
         text = None
+
+    # Placed against the panels rather than in the layout, which is why the
+    # positions are asked for only once everything else has settled: a
+    # vertical scale beside the row it describes, and the magnetogram's
+    # beside the magnetogram.
+    fig.canvas.draw()
+
+    position = axs[1, -1].get_position()
+    fig.colorbar(
+        matplotlib.cm.ScalarMappable(norm=norm_velocity, cmap=colormap_velocity),
+        cax=fig.add_axes((position.x1 + 0.010, position.y0, 0.011, position.height)),
+        label=f"LOS velocity ({unit_velocity:latex_inline})",
+    )
+
+    position = ax_hmi.get_position()
+    fig.colorbar(
+        mesh_hmi,
+        cax=fig.add_axes((position.x1 + 0.010, position.y0, 0.011, position.height)),
+        label=f"line-of-sight field ({unit_hmi:latex_inline})",
+    )
+
+    # Held still now, so that the panels do not shift about from one frame to
+    # the next and leave the scales beside nothing.
+    fig.set_layout_engine("none")
 
     def func(index_time: int) -> list[matplotlib.artist.Artist]:
 
@@ -1541,10 +1574,11 @@ def level_4_event(
             images_line[2 * i].set_data(intensity[i][index_time])
             images_line[2 * i + 1].set_data(shift[i][index_time])
 
-        image_aia.set_data(images_aia[index_time])
+        for i in range(num_aia):
+            image_aia[i].set_data(images_aia[i][index_time])
         mesh_hmi.set_array(images_hmi[index_time])
 
-        result = [*images_line, image_aia, mesh_hmi]
+        result = [*images_line, *image_aia, mesh_hmi]
 
         if text is None:
             return result
