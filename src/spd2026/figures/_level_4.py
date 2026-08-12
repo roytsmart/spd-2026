@@ -22,7 +22,7 @@ import named_arrays as na
 import sdo
 import esis
 from .._temperature import order_temperature
-from ._color import velocity_color_default, percentile_default, colors_line
+from ._color import velocity_color_default, percentile_default
 from ._layout import figsize_default, bottom_default, height_default
 from ._path import default_path
 
@@ -1940,10 +1940,16 @@ def level_4_event_history(
     # it explicitly rather than being left to work it out.
     fig.get_layout_engine().set(h_pad=0.1)
 
-    # Ordered by formation temperature, like the curves themselves, so that
-    # the coolest line is at one end of the colormap and the hottest at the
-    # other.
-    color = colors_line(a.num_line)
+    # One line only. Five of them is ten curves once each is drawn both
+    # ways, which is more than a panel this size can say. The two are told
+    # apart by color instead, taken from the ends of the colormap the Doppler
+    # panel is drawn in, so that the blue curve is the same blue that means
+    # approaching there.
+    colormap_extreme = plt.get_cmap(cmap_velocity)
+    color_extreme = {
+        "blue": colormap_extreme(0.1),
+        "red": colormap_extreme(0.9),
+    }
 
     if normalize:
         whole = _intensity(a)
@@ -1967,30 +1973,30 @@ def level_4_event_history(
     # What the product counts, before any of it is turned into energy.
     unit_counted = na.unit(a.outputs) * na.unit(a.inputs.wavelength)
 
-    for i, index_line_i in enumerate(order_temperature(list(a.label_line))):
-        label = a.label_line[index_line_i]
-        for name, linestyle, _ in extremes:
+    for name, linestyle, _ in extremes:
 
-            intensity = tracked[label][f"i_{name}"]
-            if normalize:
-                intensity = intensity / reference[i]
-            else:
-                intensity = (intensity * unit_counted * _energy_photon(a, i)).to_value(
-                    unit_intensity
-                )
+        intensity = tracked[label_line][f"i_{name}"]
+        if normalize:
+            intensity = intensity / reference[index_line]
+        else:
+            intensity = (
+                intensity * unit_counted * _energy_photon(a, index_line)
+            ).to_value(unit_intensity)
 
-            axs[0, 0].plot(
-                seconds,
-                intensity,
-                color=color[i],
-                linestyle=linestyle,
-            )
-            axs[1, 0].plot(
-                seconds,
-                tracked[label][f"v_{name}"],
-                color=color[i],
-                linestyle=linestyle,
-            )
+        axs[0, 0].plot(
+            seconds,
+            intensity,
+            color=color_extreme[name],
+            linestyle=linestyle,
+        )
+        axs[1, 0].plot(
+            seconds,
+            tracked[label_line][f"v_{name}"],
+            color=color_extreme[name],
+            linestyle=linestyle,
+        )
+
+    axs[0, 0].set_title(label_line, loc="left")
 
     axs[0, 0].set_yscale("log")
     if normalize:
@@ -2103,18 +2109,16 @@ def level_4_event_history(
         for name, _, _ in extremes
     }
 
-    # A curve says two things: which line it is, in its color, and which way
-    # the plasma is going, in its style. One legend for each.
     axs[1, 0].legend(
         handles=[
             matplotlib.lines.Line2D(
                 [],
                 [],
-                color="black",
+                color=color_extreme[name],
                 linestyle=linestyle,
                 label=description,
             )
-            for _, linestyle, description in extremes
+            for name, linestyle, description in extremes
         ],
         loc="upper left",
         fontsize="small",
@@ -2123,18 +2127,6 @@ def level_4_event_history(
     # The marks are explained on the panel they are drawn on, rather than in
     # the legend above: a handle carrying a line style and a mark at once is
     # illegible at this size, the dashes and the mark running together.
-    axs[0, 0].legend(
-        handles=[
-            matplotlib.lines.Line2D(
-                [], [], color=color[i], label=a.label_line[index_line_i]
-            )
-            for i, index_line_i in enumerate(order_temperature(list(a.label_line)))
-        ],
-        ncols=a.num_line,
-        loc="upper left",
-        fontsize="small",
-    )
-
     axs[0, 1].legend(
         handles=[
             matplotlib.lines.Line2D(
