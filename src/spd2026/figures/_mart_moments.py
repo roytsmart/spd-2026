@@ -55,9 +55,10 @@ def mart_moments(
     percentile_color: float = 97,
     figsize: tuple[float, float] = figsize_default,
     dpi: float = 150,
+    index_iteration: None | int = None,
     fps: int = 24,
     fps_video: int = 24,
-    suffix: str = ".mp4",
+    suffix: None | str = None,
     path: None | pathlib.Path = None,
 ) -> pathlib.Path:
     """
@@ -99,6 +100,14 @@ def mart_moments(
         Places on the sky fainter than this percentile of the true radiance
         are left out, since the moments of a profile with no light in it are
         meaningless.
+    index_iteration
+        Which iteration to draw.
+
+        If :obj:`None`, all of them, one after another, as an animation.
+        Given an iteration, that one alone is drawn and saved as a still,
+        which is what a slide wants where a talk has no room for the movie.
+        Counted from zero, and negative counts from the end, so ``-1`` is
+        what the inversion finished with.
     percentile_color
         The percentile of the counts placed at the top of the color scale.
         Worked out over every iteration and then held fixed, so that a frame
@@ -119,12 +128,16 @@ def mart_moments(
         The frame rate of the file itself, for the movie formats.
         Ignored for a GIF, which records how long to hold each frame.
     suffix
-        The file type of the animation, either ``".mp4"`` or ``".gif"``.
-        Ignored if `path` is given.
+        The file type.
+        If :obj:`None`, ``".svg"`` for a still and ``".mp4"`` for the
+        animation. Ignored if `path` is given.
     path
         The location to save the animation.
         If :obj:`None`, it is saved alongside the other figures.
     """
+    if suffix is None:
+        suffix = ".mp4" if index_iteration is None else ".svg"
+
     truth = scene_degraded()
     inv = inversion_sim() if inversion is None else inversion
 
@@ -207,8 +220,16 @@ def mart_moments(
     # it is coming apart.
     titles = ("brightness", "Doppler shift", "line width")
 
+    if index_iteration is not None:
+        # Counted from the end as well as from the start, and settled here so
+        # that the name of the file says which iteration it is of.
+        index_iteration = range(num_iteration)[index_iteration]
+
     if path is None:
-        path = default_path / f"mart-moments{suffix}"
+        stem = "mart-moments"
+        if index_iteration is not None:
+            stem = f"{stem}-{index_iteration + 1}"
+        path = default_path / f"{stem}{suffix}"
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with astropy.visualization.quantity_support():
@@ -317,17 +338,22 @@ def mart_moments(
 
             return [*transient, *texts, title]
 
-        ani = matplotlib.animation.FuncAnimation(
-            fig=fig,
-            func=func,
-            frames=num_iteration * repeat,
-        )
+        if index_iteration is not None:
+            func(index_iteration * repeat)
+            fig.savefig(path, dpi=dpi)
 
-        ani.save(
-            filename=path,
-            writer=writer,
-            dpi=dpi,
-        )
+        else:
+            ani = matplotlib.animation.FuncAnimation(
+                fig=fig,
+                func=func,
+                frames=num_iteration * repeat,
+            )
+
+            ani.save(
+                filename=path,
+                writer=writer,
+                dpi=dpi,
+            )
 
     plt.close(fig)
 
