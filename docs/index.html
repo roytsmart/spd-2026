@@ -40,7 +40,11 @@ Events Observed with ESIS</title>
   /* The typefaces the theme asks for, and what to fall back to. */
   .text { font-family: "Aptos", "Segoe UI", system-ui, sans-serif; }
   .bullet { padding-left: 1.1em; text-indent: -1.1em; }
-  .bullet::before { content: "•  "; }
+  /* Given a box exactly as wide as the indent it is hung in, so that the
+     first line of a bullet starts where the ones it wraps onto do. A glyph
+     and a couple of spaces are narrower than that, and the difference shows
+     up as a step at the front of every second line. */
+  .bullet::before { content: "•"; display: inline-block; width: 1.1em; }
   .number {
     position: absolute; right: 0; bottom: -1.4rem;
     font-size: .8rem; opacity: .45; font-variant-numeric: tabular-nums;
