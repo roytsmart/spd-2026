@@ -103,9 +103,24 @@ Events Observed with ESIS</title>
         if (!p.dataset.size) p.dataset.size = getComputedStyle(p).fontSize;
         p.style.fontSize = p.dataset.size;
       });
+      // Measured by adding the lines up rather than by asking the box how
+      // far it is overrun, which only counts what hangs off the bottom: a
+      // box anchored to its foot spills upwards, and the title on the first
+      // slide spills up and out of the shape drawn behind it.
+      const style = getComputedStyle(box);
+      const room =
+        box.clientHeight -
+        parseFloat(style.paddingTop) -
+        parseFloat(style.paddingBottom);
+      const lines = box.querySelectorAll("p");
+      const height = () => {
+        let total = 0;
+        lines.forEach((p) => (total += p.getBoundingClientRect().height));
+        return total;
+      };
       let guard = 0;
-      while (box.scrollHeight > box.clientHeight + 1 && guard < 60) {
-        box.querySelectorAll("p").forEach((p) => {
+      while (height() > room + 1 && guard < 60) {
+        lines.forEach((p) => {
           p.style.fontSize = parseFloat(getComputedStyle(p).fontSize) * 0.97 + "px";
         });
         guard += 1;
